@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leilão Inteligente — Aracaju/SE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  --brand:       #2563EB;
+  --brand-dark:  #1D4ED8;
+  --brand-light: #EFF6FF;
+  --green:       #059669;
+  --green-light: #ECFDF5;
+  --red:         #DC2626;
+  --orange:      #EA580C;
+  --purple:      #7C3AED;
+  --yellow:      #D97706;
+
+  --bg:          #F8FAFC;
+  --surface:     #FFFFFF;
+  --border:      #E2E8F0;
+  --border-2:    #CBD5E1;
+  --text:        #0F172A;
+  --text-2:      #475569;
+  --text-3:      #94A3B8;
+
+  --nav-w:       240px;
+  --r:           10px;
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow:      0 4px 16px rgba(0,0,0,.08);
+  --shadow-lg:   0 10px 40px rgba(0,0,0,.12);
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;font-size:14px;line-height:1.5;}
+a{color:inherit;text-decoration:none;}
+
+/* ============================================================
+   SIDEBAR NAV
+   ============================================================ */
+#nav{
+  width:var(--nav-w);background:var(--surface);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;
+}
+.nav-logo{
+  display:flex;align-items:center;gap:10px;
+  padding:20px 20px 16px;
+  border-bottom:1px solid var(--border);
+}
+.nav-logo-mark{
+  width:36px;height:36px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--brand),#818CF8);
+  display:grid;place-items:center;
+  box-shadow:0 2px 8px rgba(37,99,235,.35);
+}
+.nav-logo-mark svg{width:18px;height:18px;fill:#fff;}
+.nav-logo-name{font-size:14px;font-weight:800;color:var(--text);line-height:1.2;}
+.nav-logo-sub{font-size:11px;color:var(--text-3);font-weight:500;}
+
+.nav-section{padding:12px 12px 4px;font-size:10px;font-weight:700;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase;}
+.nav-item{
+  display:flex;align-items:center;gap:9px;
+  padding:9px 12px;margin:1px 8px;
+  border-radius:8px;color:var(--text-2);font-size:13.5px;font-weight:500;
+  cursor:pointer;transition:.15s all;
+}
+.nav-item:hover{background:var(--bg);color:var(--text);}
+.nav-item.active{background:var(--brand-light);color:var(--brand);font-weight:600;}
+.nav-item .icon{width:18px;height:18px;display:grid;place-items:center;flex-shrink:0;font-size:15px;}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;}
+
+.nav-footer{margin-top:auto;padding:12px 12px;border-top:1px solid var(--border);}
+.nav-user{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;background:var(--bg);}
+.nav-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--brand),#818CF8);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0;}
+.nav-user-name{font-size:13px;font-weight:600;line-height:1.2;}
+.nav-user-plan{font-size:10px;font-weight:700;color:var(--brand);letter-spacing:.04em;}
+.btn-logout{
+  width:100%;margin-top:8px;padding:8px;
+  border:1px solid var(--border);background:transparent;
+  border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--text-2);
+  font-family:inherit;font-weight:500;display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:.15s;
+}
+.btn-logout:hover{background:var(--bg);color:var(--red);border-color:var(--red);}
+
+/* ============================================================
+   MAIN LAYOUT
+   ============================================================ */
+#main{margin-left:var(--nav-w);flex:1;display:flex;flex-direction:column;min-width:0;}
+.page{display:none;flex:1;flex-direction:column;padding:28px 32px;min-height:0;}
+.page.active{display:flex;}
+
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:16px;}
+.topbar-title{font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.3px;}
+.topbar-sub{font-size:13px;color:var(--text-2);margin-top:2px;}
+
+/* ============================================================
+   AUTH
+   ============================================================ */
+#auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;width:100%;background:linear-gradient(135deg,#EFF6FF 0%,#F8FAFC 50%,#F0FDF4 100%);}
+.auth-wrap{width:100%;max-width:440px;padding:24px;}
+.auth-card{background:#fff;border-radius:16px;border:1px solid var(--border);padding:40px;box-shadow:var(--shadow-lg);}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px;}
+.auth-logo-mark{width:48px;height:48px;border-radius:13px;background:linear-gradient(135deg,var(--brand),#818CF8);display:grid;place-items:center;box-shadow:0 4px 16px rgba(37,99,235,.35);}
+.auth-logo-mark svg{width:24px;height:24px;fill:#fff;}
+.auth-title{font-size:22px;font-weight:800;margin-bottom:2px;letter-spacing:-.3px;}
+.auth-sub{color:var(--text-2);font-size:13px;}
+.form-label{display:block;font-size:12.5px;font-weight:600;color:var(--text-2);margin-bottom:6px;letter-spacing:.01em;}
+.form-input{
+  width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;
+  font-size:14px;font-family:inherit;outline:none;transition:.15s;background:#fff;color:var(--text);
+}
+.form-input:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.12);}
+.form-group{margin-bottom:14px;}
+.btn-primary{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:12px;border:none;border-radius:9px;
+  background:linear-gradient(135deg,var(--brand),#818CF8);
+  color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
+  box-shadow:0 4px 14px rgba(37,99,235,.35);transition:.2s;letter-spacing:.01em;
+  margin-top:6px;
+}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(37,99,235,.45);}
+.btn-primary:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+.auth-hint{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:14px;font-size:12px;color:var(--text-2);line-height:1.7;}
+.auth-switch{text-align:center;margin-top:14px;font-size:13px;color:var(--text-2);}
+.auth-switch a{color:var(--brand);cursor:pointer;font-weight:600;}
+
+/* ============================================================
+   KPI CARDS
+   ============================================================ */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:24px;}
+.kpi-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:18px 20px;display:flex;flex-direction:column;gap:10px;
+  box-shadow:var(--shadow-sm);
+}
+.kpi-row{display:flex;align-items:center;justify-content:space-between;}
+.kpi-icon{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-size:17px;}
+.kpi-delta{font-size:11px;font-weight:600;padding:2px 7px;border-radius:20px;}
+.kpi-value{font-size:26px;font-weight:800;letter-spacing:-.5px;color:var(--text);}
+.kpi-label{font-size:12px;color:var(--text-2);font-weight:500;}
+
+/* ============================================================
+   CARDS DE IMÓVEL
+   ============================================================ */
+.imoveis-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;}
+.icard{
+  background:var(--surface);border:1.5px solid var(--border);border-radius:12px;
+  overflow:hidden;cursor:pointer;transition:.2s all;position:relative;
+  box-shadow:var(--shadow-sm);
+}
+.icard:hover{box-shadow:var(--shadow);border-color:var(--border-2);transform:translateY(-2px);}
+.icard-top{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.score-pill{
+  display:flex;align-items:center;gap:5px;
+  padding:5px 12px;border-radius:20px;color:#fff;font-weight:700;font-size:12.5px;
+  letter-spacing:.02em;
+}
+.score-pip{width:7px;height:7px;background:rgba(255,255,255,.6);border-radius:50%;}
+.radar-pill{
+  background:linear-gradient(135deg,#059669,#10B981);
+  color:#fff;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:700;
+  display:flex;align-items:center;gap:4px;letter-spacing:.04em;
+  box-shadow:0 2px 8px rgba(5,150,105,.35);
+}
+.fav-btn{
+  position:absolute;top:10px;right:12px;background:rgba(255,255,255,.92);
+  border:1px solid var(--border);border-radius:50%;width:30px;height:30px;
+  display:grid;place-items:center;font-size:14px;cursor:pointer;
+  box-shadow:var(--shadow-sm);transition:.15s;
+}
+.fav-btn:hover{background:#fff;box-shadow:var(--shadow);}
+.icard-body{padding:12px 14px 14px;}
+.icard-tags{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;}
+.itag{padding:3px 8px;border-radius:5px;font-size:10.5px;font-weight:700;letter-spacing:.04em;}
+.itag-tipo{background:#EFF6FF;color:var(--brand);}
+.itag-ocupado{background:#FFF7ED;color:var(--orange);}
+.itag-fonte{background:#F8FAFC;color:var(--text-2);}
+.icard-addr{font-weight:700;font-size:13.5px;margin-bottom:2px;line-height:1.3;color:var(--text);}
+.icard-loc{font-size:11.5px;color:var(--text-2);margin-bottom:12px;display:flex;align-items:center;gap:4px;}
+.icard-divider{border:none;border-top:1px solid var(--border);margin-bottom:12px;}
+.icard-vals{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.ival-label{font-size:10.5px;color:var(--text-3);font-weight:600;display:block;margin-bottom:2px;letter-spacing:.03em;text-transform:uppercase;}
+.ival{font-size:13.5px;font-weight:700;color:var(--text);}
+.ival.green{color:var(--green);}
+.ival.blue{color:var(--brand);}
+.icard-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.imeta{font-size:11px;color:var(--text-2);display:flex;align-items:center;gap:3px;}
+.icard-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+.btn-detail{
+  flex:1;padding:8px;border:1.5px solid var(--brand);border-radius:7px;
+  background:transparent;color:var(--brand);font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;
+  transition:.15s;
+}
+.btn-detail:hover{background:var(--brand-light);}
+.btn-link{
+  padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;
+  background:transparent;color:var(--text-2);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;transition:.15s;text-decoration:none;
+}
+.btn-link:hover{background:var(--bg);border-color:var(--border-2);color:var(--text);}
+
+/* ============================================================
+   FILTROS BAR
+   ============================================================ */
+.filtros-bar{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:16px 18px;margin-bottom:20px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;
+  box-shadow:var(--shadow-sm);
+}
+.filtros-bar .form-group{margin:0;flex:1;min-width:130px;}
+.filtros-bar .form-label{font-size:11px;}
+.filtros-bar .form-input{padding:8px 11px;font-size:13px;}
+.btn-filter{
+  padding:9px 18px;border-radius:8px;border:none;
+  background:linear-gradient(135deg,var(--brand),#818CF8);
+  color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
+  white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.3);
+}
+.btn-filter:hover{opacity:.9;}
+.btn-clear{padding:9px 14px;border:1.5px solid var(--border);background:#fff;border-radius:8px;cursor:pointer;font-size:12.5px;color:var(--text-2);font-family:inherit;}
+.btn-clear:hover{background:var(--bg);}
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);
+  z-index:1000;align-items:center;justify-content:center;padding:20px;
+  backdrop-filter:blur(4px);
+}
+.modal-overlay.open{display:flex;}
+.modal{
+  background:#fff;border-radius:16px;max-width:720px;width:100%;
+  max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);
+}
+.modal-header{
+  padding:18px 24px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;background:#fff;z-index:1;
+}
+.modal-title{font-size:17px;font-weight:800;letter-spacing:-.2px;}
+.modal-close{
+  background:var(--bg);border:1px solid var(--border);width:32px;height:32px;
+  border-radius:8px;cursor:pointer;font-size:18px;display:grid;place-items:center;
+  color:var(--text-2);transition:.15s;
+}
+.modal-close:hover{background:var(--border);color:var(--text);}
+.modal-body{padding:24px;}
+
+/* Detalhes */
+.detail-hero{
+  background:linear-gradient(135deg,#F8FAFC,#EFF6FF);
+  border:1px solid #DBEAFE;border-radius:12px;padding:20px;margin-bottom:20px;
+}
+.detail-pills{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.detail-addr{font-size:18px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px;}
+.detail-loc{font-size:13px;color:var(--text-2);display:flex;align-items:center;gap:4px;}
+.detail-section{margin-bottom:20px;}
+.detail-section h3{font-size:12px;font-weight:700;color:var(--text-3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
+.detail-rows{border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.drow{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;font-size:13.5px;border-bottom:1px solid var(--border);}
+.drow:last-child{border-bottom:none;}
+.drow:nth-child(odd){background:#FAFAFA;}
+.drow .dl{color:var(--text-2);font-weight:500;}
+.drow .dv{font-weight:600;color:var(--text);}
+.drow .dv.green{color:var(--green);}
+.drow .dv.blue{color:var(--brand);}
+.drow .dv.red{color:var(--red);}
+.drow .dv.big{font-size:16px;font-weight:800;}
+
+/* Análise IA */
+.ia-card{
+  background:linear-gradient(135deg,#FAFAFA,#F8FAFC);
+  border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px;
+}
+.ia-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.ia-badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em;}
+.ia-resumo{font-size:13.5px;line-height:1.7;color:var(--text);background:#fff;border-radius:8px;padding:14px;border:1px solid var(--border);margin-bottom:12px;}
+.ia-col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+.ia-block h4{font-size:11.5px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:5px;}
+.ia-block ul{list-style:none;}
+.ia-block ul li{font-size:12.5px;padding:4px 0;display:flex;gap:6px;color:var(--text);}
+.ia-rec{border-radius:8px;padding:14px;border-left:3px solid;font-size:13px;line-height:1.6;}
+.modal-cta{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;}
+.modal-cta a,.modal-cta button{
+  flex:1;min-width:140px;padding:11px 16px;border-radius:9px;font-size:13.5px;
+  font-weight:700;cursor:pointer;font-family:inherit;text-align:center;
+  display:flex;align-items:center;justify-content:center;gap:7px;
+  text-decoration:none;transition:.15s;
+}
+.cta-primary{
+  background:linear-gradient(135deg,var(--brand),#818CF8);color:#fff;border:none;
+  box-shadow:0 3px 10px rgba(37,99,235,.3);
+}
+.cta-primary:hover{opacity:.92;}
+.cta-secondary{background:#fff;color:var(--text);border:1.5px solid var(--border);}
+.cta-secondary:hover{background:var(--bg);border-color:var(--border-2);}
+.cta-green{background:var(--green-light);color:var(--green);border:1.5px solid #A7F3D0;}
+.cta-green:hover{background:#D1FAE5;}
+
+/* ============================================================
+   RADAR SECTION
+   ============================================================ */
+.radar-banner{
+  background:linear-gradient(135deg,#ECFDF5,#D1FAE5);
+  border:1.5px solid #6EE7B7;border-radius:12px;padding:18px 22px;margin-bottom:22px;
+}
+.radar-banner-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px;}
+.radar-banner-title{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:800;color:#065F46;}
+.radar-count-pill{background:var(--green);color:#fff;padding:3px 12px;border-radius:20px;font-size:12px;font-weight:700;}
+.radar-banner-sub{font-size:12.5px;color:#047857;}
+
+/* ============================================================
+   MAPA
+   ============================================================ */
+.mapa-container{position:relative;border-radius:12px;overflow:hidden;border:1.5px solid var(--border);box-shadow:var(--shadow-sm);}
+#map{height:520px;}
+.mapa-legend{
+  display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;
+}
+.legend-item{
+  display:flex;align-items:center;gap:6px;padding:6px 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:20px;
+  font-size:12px;font-weight:600;color:var(--text-2);
+}
+.legend-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+
+.map-popup-inner{min-width:220px;font-family:'Inter',sans-serif;}
+.map-popup-score{font-size:15px;font-weight:800;margin-bottom:4px;}
+.map-popup-addr{font-size:13px;font-weight:600;margin-bottom:2px;}
+.map-popup-loc{font-size:11px;color:#64748B;margin-bottom:10px;}
+.map-popup-vals{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;}
+.map-popup-val label{font-size:10px;color:#94A3B8;display:block;font-weight:600;text-transform:uppercase;}
+.map-popup-val span{font-size:13px;font-weight:700;}
+.map-popup-actions{display:flex;gap:6px;}
+.map-btn{
+  flex:1;padding:8px;border-radius:7px;font-size:12px;font-weight:700;
+  cursor:pointer;font-family:inherit;text-align:center;
+  display:flex;align-items:center;justify-content:center;gap:4px;
+  text-decoration:none;border:none;
+}
+.map-btn-primary{background:var(--brand);color:#fff;}
+.map-btn-ext{background:var(--bg);color:var(--text-2);border:1px solid var(--border);}
+
+/* ============================================================
+   SIMULADOR
+   ============================================================ */
+.sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.sim-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:22px;box-shadow:var(--shadow-sm);}
+.sim-card h3{font-size:15px;font-weight:700;margin-bottom:18px;color:var(--text);}
+.sim-imoveis-list{
+  max-height:280px;overflow-y:auto;border:1.5px solid var(--border);border-radius:9px;
+  background:#fff;
+}
+.sim-item{
+  padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:.15s;
+}
+.sim-item:last-child{border-bottom:none;}
+.sim-item:hover{background:var(--bg);}
+.sim-item.selected{background:var(--brand-light);border-left:3px solid var(--brand);}
+.sim-item-name{font-size:13px;font-weight:600;color:var(--text);}
+.sim-item-sub{font-size:11.5px;color:var(--text-2);}
+.sim-selected-box{
+  background:linear-gradient(135deg,var(--brand-light),#EEF2FF);
+  border:1.5px solid #BFDBFE;border-radius:9px;padding:14px;margin:12px 0;
+  display:none;
+}
+.sim-selected-name{font-size:13.5px;font-weight:700;margin-bottom:4px;}
+.sim-chips{display:flex;gap:6px;flex-wrap:wrap;}
+.sim-chip{padding:3px 9px;border-radius:6px;font-size:11px;font-weight:700;}
+.sim-result-card{
+  background:linear-gradient(135deg,#EFF6FF,#F0FDF4);
+  border:1.5px solid #BBF7D0;border-radius:12px;padding:22px;margin-top:18px;
+}
+.sim-result-title{font-size:15px;font-weight:700;margin-bottom:18px;color:var(--text);}
+.sim-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.sim-r-item label{font-size:10.5px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px;}
+.sim-r-val{font-size:20px;font-weight:800;letter-spacing:-.5px;}
+.sim-r-val.green{color:var(--green);}
+.sim-r-val.blue{color:var(--brand);}
+.sim-warning{font-size:11.5px;color:var(--text-2);margin-top:14px;padding:10px 14px;background:#fff;border-radius:8px;border:1px solid var(--border);}
+
+/* ============================================================
+   ALERTAS
+   ============================================================ */
+.alerta-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:14px 18px;display:flex;align-items:center;gap:14px;margin-bottom:10px;
+  box-shadow:var(--shadow-sm);transition:.15s;
+}
+.alerta-card:hover{box-shadow:var(--shadow);}
+.alerta-icon{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-size:18px;flex-shrink:0;}
+.alerta-info{flex:1;}
+.alerta-title{font-size:13.5px;font-weight:600;margin-bottom:2px;}
+.alerta-desc{font-size:11.5px;color:var(--text-2);}
+.alerta-del{background:none;border:none;cursor:pointer;font-size:18px;padding:4px;border-radius:6px;transition:.15s;color:var(--text-3);}
+.alerta-del:hover{background:#FEF2F2;color:var(--red);}
+.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;}
+
+/* ============================================================
+   CHARTS
+   ============================================================ */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;box-shadow:var(--shadow-sm);}
+.chart-card h3{font-size:13px;font-weight:700;color:var(--text-2);margin-bottom:16px;text-transform:uppercase;letter-spacing:.06em;}
+
+/* ============================================================
+   PAGINATION
+   ============================================================ */
+.pagination{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:22px;}
+.page-btn{
+  padding:7px 13px;border:1.5px solid var(--border);background:var(--surface);
+  border-radius:7px;cursor:pointer;font-size:12.5px;font-weight:600;font-family:inherit;
+  color:var(--text-2);transition:.15s;
+}
+.page-btn:hover:not(:disabled){background:var(--bg);border-color:var(--border-2);color:var(--text);}
+.page-btn:disabled{opacity:.35;cursor:not-allowed;}
+.page-btn.active{background:var(--brand);border-color:var(--brand);color:#fff;}
+
+/* ============================================================
+   EMPTY STATE
+   ============================================================ */
+.empty-state{
+  text-align:center;padding:60px 20px;color:var(--text-2);
+  grid-column:1/-1;
+}
+.empty-icon{font-size:48px;margin-bottom:14px;}
+.empty-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px;}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+#toast{
+  position:fixed;bottom:24px;right:24px;
+  background:var(--text);color:#fff;padding:12px 20px;border-radius:10px;
+  font-size:13.5px;font-weight:500;z-index:999;display:none;
+  box-shadow:var(--shadow-lg);animation:slideup .25s ease;
+}
+@keyframes slideup{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+.flex{display:flex;} .items-center{align-items:center;} .gap-2{gap:8px;} .ml-auto{margin-left:auto;}
+.btn-sm{
+  padding:7px 14px;border-radius:7px;border:1.5px solid var(--border);background:var(--surface);
+  font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text-2);
+  display:flex;align-items:center;gap:5px;white-space:nowrap;transition:.15s;
+}
+.btn-sm:hover{background:var(--bg);}
+.btn-sm.primary{background:var(--brand);color:#fff;border-color:var(--brand);}
+.btn-sm.primary:hover{background:var(--brand-dark);}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ AUTH ============================================================ -->
+<div id="auth-screen">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="auth-logo-mark">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22" style="fill:rgba(255,255,255,.4)"/></svg>
+        </div>
+        <div>
+          <div class="auth-title">Leilão Inteligente</div>
+          <div class="auth-sub">Plataforma de oportunidades imobiliárias · Aracaju/SE</div>
+        </div>
+      </div>
+
+      <div id="auth-login">
+        <div style="font-size:20px;font-weight:800;margin-bottom:4px;letter-spacing:-.3px;">Entrar na conta</div>
+        <div style="color:var(--text-2);font-size:13px;margin-bottom:22px;">Acesse as melhores oportunidades de leilão</div>
+        <div class="form-group"><label class="form-label">E-mail</label><input class="form-input" id="login-email" type="email" value="admin@leilaointeligente.com.br"></div>
+        <div class="form-group"><label class="form-label">Senha</label><input class="form-input" id="login-senha" type="password" value="Admin@123"></div>
+        <button class="btn-primary" onclick="doLogin()" id="login-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Entrar
+        </button>
+        <div class="auth-hint">
+          <b>Contas demo:</b><br>
+          👑 admin@leilaointeligente.com.br / Admin@123<br>
+          👤 joao@demo.com / demo123
+        </div>
+        <div class="auth-switch">Não tem conta? <a onclick="showRegister()">Criar grátis</a></div>
+      </div>
+
+      <div id="auth-register" style="display:none;">
+        <div style="font-size:20px;font-weight:800;margin-bottom:4px;letter-spacing:-.3px;">Criar conta grátis</div>
+        <div style="color:var(--text-2);font-size:13px;margin-bottom:22px;">Comece a identificar oportunidades hoje</div>
+        <div class="form-group"><label class="form-label">Nome completo</label><input class="form-input" id="reg-nome" placeholder="Seu nome"></div>
+        <div class="form-group"><label class="form-label">E-mail</label><input class="form-input" id="reg-email" type="email" placeholder="email@exemplo.com"></div>
+        <div class="form-group"><label class="form-label">Senha</label><input class="form-input" id="reg-senha" type="password" placeholder="Mínimo 6 caracteres"></div>
+        <button class="btn-primary" onclick="doRegister()">Criar minha conta</button>
+        <div class="auth-switch">Já tem conta? <a onclick="showLogin()">Entrar</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ APP ============================================================ -->
+<div id="app" style="display:none;width:100%;">
+
+  <!-- SIDEBAR -->
+  <nav id="nav">
+    <div class="nav-logo">
+      <div class="nav-logo-mark">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22" style="fill:rgba(255,255,255,.35)"/></svg>
+      </div>
+      <div>
+        <div class="nav-logo-name">Leilão Inteligente</div>
+        <div class="nav-logo-sub">Aracaju / SE</div>
+      </div>
+    </div>
+
+    <div class="nav-section" style="margin-top:10px;">Principal</div>
+    <div class="nav-item active" data-page="dashboard" onclick="goto('dashboard')"><span class="icon">📊</span>Dashboard</div>
+    <div class="nav-item" data-page="imoveis" onclick="goto('imoveis')"><span class="icon">🏘️</span>Imóveis</div>
+    <div class="nav-item" data-page="radar" onclick="goto('radar')"><span class="icon">📡</span>Radar <span class="nav-badge" id="nav-radar-count">—</span></div>
+
+    <div class="nav-section">Ferramentas</div>
+    <div class="nav-item" data-page="mapa" onclick="goto('mapa')"><span class="icon">🗺️</span>Mapa</div>
+    <div class="nav-item" data-page="simulador" onclick="goto('simulador')"><span class="icon">🧮</span>Simulador</div>
+    <div class="nav-item" data-page="alertas" onclick="goto('alertas')"><span class="icon">🔔</span>Alertas</div>
+
+    <div class="nav-section" id="nav-admin-section" style="display:none;">Administração</div>
+    <div class="nav-item" data-page="admin" id="nav-admin" style="display:none;" onclick="goto('admin')"><span class="icon">⚙️</span>Administração</div>
+
+    <div class="nav-footer">
+      <div class="nav-user">
+        <div class="nav-avatar" id="user-initial">?</div>
+        <div>
+          <div class="nav-user-name" id="user-name">—</div>
+          <div class="nav-user-plan" id="user-plan">FREE</div>
+        </div>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sair da conta
+      </button>
+    </div>
+  </nav>
+
+  <div id="main">
+
+    <!-- ======= DASHBOARD ======= -->
+    <div class="page active" id="page-dashboard">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title" id="dash-greeting">Dashboard</div>
+          <div class="topbar-sub">Visão geral das oportunidades em Aracaju/SE</div>
+        </div>
+        <button class="btn-sm primary" onclick="refreshDashboard()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+          Atualizar
+        </button>
+      </div>
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div class="radar-banner">
+        <div class="radar-banner-top">
+          <div class="radar-banner-title">📡 Radar de Oportunidades <span class="radar-count-pill" id="radar-count">0</span></div>
+          <button class="btn-sm" onclick="goto('radar')">Ver todos →</button>
+        </div>
+        <div class="radar-banner-sub">Score ≥ 80 &nbsp;·&nbsp; Desconto ≥ 30% &nbsp;·&nbsp; Lucro ≥ R$ 50.000 &nbsp;·&nbsp; Leilão nos próximos 30 dias</div>
+      </div>
+      <div class="imoveis-grid" id="radar-grid"></div>
+      <div class="charts-grid">
+        <div class="chart-card"><h3>Desconto médio por bairro</h3><canvas id="chart-bairros"></canvas></div>
+        <div class="chart-card"><h3>Distribuição por tipo</h3><canvas id="chart-tipos"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ======= IMÓVEIS ======= -->
+    <div class="page" id="page-imoveis">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title">Imóveis em Leilão</div>
+          <div class="topbar-sub" id="total-label">Carregando...</div>
+        </div>
+      </div>
+      <div class="filtros-bar">
+        <div class="form-group"><label class="form-label">Bairro</label><input class="form-input" id="f-bairro" placeholder="Ex: Atalaia" onkeydown="if(event.key==='Enter')applyFiltros()"></div>
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select class="form-input" id="f-tipo"><option value="">Todos os tipos</option><option value="apartamento">Apartamento</option><option value="casa">Casa</option><option value="terreno">Terreno</option><option value="comercial">Comercial</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Score mínimo</label><input class="form-input" id="f-score" type="number" placeholder="0 – 100" min="0" max="100"></div>
+        <div class="form-group"><label class="form-label">Situação</label>
+          <select class="form-input" id="f-ocupado"><option value="">Todos</option><option value="false">Desocupado</option><option value="true">Ocupado</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Lance máx. (R$)</label><input class="form-input" id="f-valor-max" type="number" placeholder="Ex: 500.000"></div>
+        <button class="btn-filter" onclick="applyFiltros()">🔍 Filtrar</button>
+        <button class="btn-clear" onclick="clearFiltros()">✕ Limpar</button>
+      </div>
+      <div class="imoveis-grid" id="imoveis-grid"></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+    <!-- ======= RADAR ======= -->
+    <div class="page" id="page-radar">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title">📡 Radar de Oportunidades</div>
+          <div class="topbar-sub">Seleção automática pelos critérios mais rigorosos</div>
+        </div>
+      </div>
+      <div style="background:var(--green-light);border:1.5px solid #6EE7B7;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#065F46;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:18px;">✅</span>
+        <span><b>Critérios simultâneos:</b> Score ≥ 80 &nbsp;·&nbsp; Desconto ≥ 30% &nbsp;·&nbsp; Lucro potencial ≥ R$ 50.000 &nbsp;·&nbsp; Leilão nos próximos 30 dias</span>
+      </div>
+      <div class="imoveis-grid" id="radar-page-grid"></div>
+    </div>
+
+    <!-- ======= MAPA ======= -->
+    <div class="page" id="page-mapa">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title">🗺️ Mapa de Oportunidades</div>
+          <div class="topbar-sub">Todos os imóveis georreferenciados em Aracaju/SE</div>
+        </div>
+        <button class="btn-sm" onclick="resetMapView()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Centralizar
+        </button>
+      </div>
+      <div class="mapa-container">
+        <div id="map"></div>
+      </div>
+      <div class="mapa-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#059669;"></div>Excelente (≥ 80)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--brand);"></div>Bom (60–79)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--orange);"></div>Moderado (40–59)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red);"></div>Risco (&lt; 40)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green);border:2px solid #fff;box-shadow:0 0 0 1.5px var(--green);"></div>No Radar</div>
+      </div>
+    </div>
+
+    <!-- ======= SIMULADOR ======= -->
+    <div class="page" id="page-simulador">
+      <div class="topbar">
+        <div class="topbar-title">🧮 Simulador de Investimento</div>
+        <div class="topbar-sub">Calcule o retorno real antes de licitar</div>
+      </div>
+      <div class="sim-grid">
+        <div class="sim-card">
+          <h3>Selecionar imóvel</h3>
+          <div class="form-group"><label class="form-label">Buscar por bairro ou endereço</label><input class="form-input" id="sim-search" placeholder="Digite para filtrar..." oninput="simSearch()"></div>
+          <div class="sim-imoveis-list" id="sim-imoveis"></div>
+          <div class="sim-selected-box" id="sim-selected-box">
+            <div class="sim-selected-name" id="sim-selected-name"></div>
+            <div class="sim-chips" id="sim-selected-chips"></div>
+          </div>
+        </div>
+        <div class="sim-card">
+          <h3>Custos adicionais</h3>
+          <div class="form-group"><label class="form-label">Reforma estimada (R$)</label><input class="form-input" id="sim-reforma" type="number" value="0"></div>
+          <div class="form-group"><label class="form-label">Impostos e taxas (R$)</label><input class="form-input" id="sim-impostos" type="number" value="0"></div>
+          <div class="form-group"><label class="form-label">Outros custos (R$)</label><input class="form-input" id="sim-outros" type="number" value="0"></div>
+          <div class="form-group"><label class="form-label">Valor de venda esperado — opcional</label><input class="form-input" id="sim-venda" type="number" placeholder="Deixe em branco para usar estimativa de mercado"></div>
+          <button class="btn-primary" onclick="calcSimulador()" id="sim-btn" disabled style="margin-top:4px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            Calcular Retorno
+          </button>
+        </div>
+      </div>
+      <div class="sim-result-card" id="sim-result" style="display:none;"></div>
+    </div>
+
+    <!-- ======= ALERTAS ======= -->
+    <div class="page" id="page-alertas">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title">🔔 Meus Alertas</div>
+          <div class="topbar-sub">Seja notificado quando novas oportunidades surgirem</div>
+        </div>
+        <button class="btn-sm primary" onclick="showAlertaModal()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo Alerta
+        </button>
+      </div>
+      <div id="alertas-list"></div>
+    </div>
+
+    <!-- ======= ADMIN ======= -->
+    <div class="page" id="page-admin">
+      <div class="topbar">
+        <div class="topbar-title">⚙️ Administração</div>
+        <button class="btn-sm primary" onclick="disparar()">🤖 Disparar Coleta</button>
+      </div>
+      <div class="kpi-grid" id="admin-stats" style="margin-bottom:24px;"></div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;box-shadow:var(--shadow-sm);">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Fontes monitoradas</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;" id="admin-fontes"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ MODAL IMÓVEL ============================================================ -->
+<div class="modal-overlay" id="modal-imovel">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Detalhes</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ============================================================ MODAL ALERTA ============================================================ -->
+<div class="modal-overlay" id="modal-alerta">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title">Novo Alerta de Oportunidade</div>
+      <button class="modal-close" onclick="document.getElementById('modal-alerta').classList.remove('open')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Bairro (opcional)</label><input class="form-input" id="al-bairro" placeholder="Ex: Atalaia"></div>
+      <div class="form-group"><label class="form-label">Tipo de imóvel</label>
+        <select class="form-input" id="al-tipo"><option value="">Todos</option><option value="apartamento">Apartamento</option><option value="casa">Casa</option><option value="terreno">Terreno</option><option value="comercial">Comercial</option></select>
+      </div>
+      <div class="form-group"><label class="form-label">Score mínimo</label><input class="form-input" id="al-score" type="number" placeholder="Ex: 80" min="0" max="100"></div>
+      <div class="form-group"><label class="form-label">Desconto mínimo (%)</label><input class="form-input" id="al-desconto" type="number" placeholder="Ex: 30"></div>
+      <div class="form-group"><label class="form-label">Canal de notificação</label>
+        <select class="form-input" id="al-canal"><option value="email">📧 E-mail</option><option value="whatsapp">💬 WhatsApp</option><option value="telegram">✈️ Telegram</option></select>
+      </div>
+      <button class="btn-primary" onclick="salvarAlerta()">Salvar Alerta</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- ============================================================ JAVASCRIPT ============================================================ -->
+<script>
+// ================================================================
+// CONFIG & STATE
+// ================================================================
+const API = '';
+let token = localStorage.getItem('li_token');
+let currentUser = null;
+let allImoveis = [];
+let filtros = {};
+let currentPage = 1;
+let simImovel = null;
+let mapInstance = null;
+let mapMarkersLayer = null;
+let chartBairros = null, chartTipos = null;
+const PER_PAGE = 12;
+const ARACAJU = [-10.9472, -37.0731];
+
+const BRL = v => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0}).format(v);
+const PCT = v => v != null ? v.toFixed(1)+'%' : '—';
+const scoreColor = s => s>=80?'#059669':s>=60?'#2563EB':s>=40?'#EA580C':'#DC2626';
+const scoreLabel = s => s>=80?'Excelente':s>=60?'Bom':s>=40?'Moderado':'Alto Risco';
+
+// Links de acesso às fontes
+const FONTE_URLS = {
+  caixa: 'https://venda-imoveis.caixa.gov.br/sistema/busca-imovel.asp',
+  banco_brasil: 'https://www.bb.com.br/pbb/pagina-inicial/empresas/produtos-e-servicos/credito/garantias/leilao-de-imoveis',
+  bradesco: 'https://banco.bradesco/html/pessoafisica/imobiliario/index.shtm',
+  itau: 'https://www.itau.com.br/emprestimos-financiamentos/imoveis/',
+  santander: 'https://www.santander.com.br/imoveis',
+  tjse: 'https://www.tjse.jus.br/portal/leiloes',
+  trf5: 'https://www.trf5.jus.br/index.php',
+  leiloeiro: 'https://leilaoinicial.com.br',
+  outro: 'https://www.tjse.jus.br',
+};
+const FONTE_LABEL = {
+  caixa:'Caixa Econômica Federal', banco_brasil:'Banco do Brasil',
+  bradesco:'Bradesco', itau:'Itaú', santander:'Santander',
+  tjse:'TJSE', trf5:'TRF5', leiloeiro:'Leiloeiro', outro:'Outro',
+};
+
+// ================================================================
+// HTTP
+// ================================================================
+async function api(method, path, body) {
+  const opts = {method,headers:{'Content-Type':'application/json'}};
+  if (token) opts.headers['Authorization']='Bearer '+token;
+  if (body) opts.body=JSON.stringify(body);
+  const r = await fetch(API+path,opts);
+  if (!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||'Erro '+r.status);}
+  return r.json();
+}
+
+// ================================================================
+// AUTH
+// ================================================================
+function showRegister(){document.getElementById('auth-login').style.display='none';document.getElementById('auth-register').style.display='block';}
+function showLogin(){document.getElementById('auth-register').style.display='none';document.getElementById('auth-login').style.display='block';}
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const senha=document.getElementById('login-senha').value;
+  const btn=document.getElementById('login-btn');
+  btn.disabled=true;btn.innerHTML='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg> Entrando...';
+  try{
+    const data=await api('POST','/api/v1/auth/login',{email,senha});
+    token=data.access_token;localStorage.setItem('li_token',token);currentUser=data.usuario;initApp();
+  }catch(e){toast('❌ '+e.message);}
+  finally{btn.disabled=false;btn.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Entrar';}
+}
+
+async function doRegister(){
+  const nome=document.getElementById('reg-nome').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const senha=document.getElementById('reg-senha').value;
+  if(!nome||!email||senha.length<6)return toast('Preencha todos os campos (senha mín. 6 chars)');
+  try{
+    const data=await api('POST','/api/v1/auth/registrar',{nome,email,senha});
+    token=data.access_token;localStorage.setItem('li_token',token);currentUser=data.usuario;initApp();
+  }catch(e){toast('❌ '+e.message);}
+}
+
+function doLogout(){
+  token=null;currentUser=null;localStorage.removeItem('li_token');
+  document.getElementById('app').style.display='none';
+  document.getElementById('auth-screen').style.display='flex';
+  showLogin();
+}
+
+// ================================================================
+// INIT
+// ================================================================
+async function initApp(){
+  if(!currentUser&&token){try{currentUser=await api('GET','/api/v1/usuarios/me');}catch{doLogout();return;}}
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('user-name').textContent=currentUser.nome.split(' ')[0];
+  document.getElementById('user-plan').textContent=currentUser.plano.toUpperCase();
+  document.getElementById('user-initial').textContent=currentUser.nome[0].toUpperCase();
+  document.getElementById('dash-greeting').textContent='Olá, '+currentUser.nome.split(' ')[0]+' 👋';
+  if(currentUser.role==='admin'){
+    document.getElementById('nav-admin').style.display='flex';
+    document.getElementById('nav-admin-section').style.display='block';
+  }
+  await loadImoveis();
+  goto('dashboard');
+}
+
+// ================================================================
+// NAVIGATION
+// ================================================================
+function goto(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  const ni=document.querySelector(`.nav-item[data-page="${page}"]`);
+  if(ni)ni.classList.add('active');
+  if(page==='dashboard')refreshDashboard();
+  if(page==='imoveis')renderImoveis();
+  if(page==='radar')renderRadar();
+  if(page==='mapa')renderMapa();
+  if(page==='simulador')initSimulador();
+  if(page==='alertas')loadAlertas();
+  if(page==='admin')loadAdmin();
+}
+
+// ================================================================
+// IMÓVEIS — LOAD & FILTER
+// ================================================================
+async function loadImoveis(){
+  const data=await api('GET','/api/v1/imoveis/?per_page=200');
+  allImoveis=data.items;
+  const rc=allImoveis.filter(i=>i.no_radar).length;
+  document.getElementById('nav-radar-count').textContent=rc;
+}
+
+function applyFiltros(){
+  filtros={};
+  const b=document.getElementById('f-bairro').value.trim();
+  const t=document.getElementById('f-tipo').value;
+  const s=document.getElementById('f-score').value;
+  const o=document.getElementById('f-ocupado').value;
+  const vm=document.getElementById('f-valor-max').value;
+  if(b)filtros.bairro=b.toLowerCase();
+  if(t)filtros.tipo=t;
+  if(s)filtros.score=parseFloat(s);
+  if(o!=='')filtros.ocupado=(o==='true');
+  if(vm)filtros.valorMax=parseFloat(vm);
+  currentPage=1;renderImoveis();
+}
+function clearFiltros(){
+  filtros={};
+  ['f-bairro','f-tipo','f-score','f-ocupado','f-valor-max'].forEach(id=>{const el=document.getElementById(id);el.tagName==='SELECT'?el.selectedIndex=0:el.value='';});
+  currentPage=1;renderImoveis();
+}
+function filterList(){
+  return allImoveis.filter(im=>{
+    if(filtros.bairro&&!im.bairro.toLowerCase().includes(filtros.bairro))return false;
+    if(filtros.tipo&&im.tipo!==filtros.tipo)return false;
+    if(filtros.score&&im.score<filtros.score)return false;
+    if(filtros.ocupado!==undefined&&im.ocupado!==filtros.ocupado)return false;
+    if(filtros.valorMax&&im.valor_lance_minimo>filtros.valorMax)return false;
+    return true;
+  });
+}
+
+// ================================================================
+// RENDER CARD
+// ================================================================
+function renderCard(im){
+  const c=scoreColor(im.score);
+  const fonteUrl=FONTE_URLS[im.fonte]||FONTE_URLS.outro;
+  const fonteLabel=FONTE_LABEL[im.fonte]||im.fonte;
+  return `
+  <div class="icard">
+    <button class="fav-btn" onclick="event.stopPropagation();toggleFav(${im.id})">${im.is_favorito?'❤️':'🤍'}</button>
+    <div class="icard-top" style="background:${c}12;">
+      <div class="score-pill" style="background:${c};">
+        <div class="score-pip"></div>Score ${im.score.toFixed(0)} · ${scoreLabel(im.score)}
+      </div>
+      ${im.no_radar?'<div class="radar-pill">📡 RADAR</div>':''}
+    </div>
+    <div class="icard-body">
+      <div class="icard-tags">
+        <span class="itag itag-tipo">${im.tipo.toUpperCase()}</span>
+        ${im.ocupado?'<span class="itag itag-ocupado">OCUPADO</span>':''}
+        <span class="itag itag-fonte">${im.fonte.toUpperCase().replace('_',' ')}</span>
+      </div>
+      <div class="icard-addr">${im.endereco}</div>
+      <div class="icard-loc">📍 ${im.bairro} · ${im.cidade}/${im.estado}</div>
+      <hr class="icard-divider">
+      <div class="icard-vals">
+        <div><span class="ival-label">Lance mínimo</span><div class="ival">${BRL(im.valor_lance_minimo)}</div></div>
+        <div><span class="ival-label">Mercado est.</span><div class="ival blue">${im.valor_mercado_estimado?BRL(im.valor_mercado_estimado):'—'}</div></div>
+        <div><span class="ival-label">Desconto</span><div class="ival green">${PCT(im.desconto_percentual)}</div></div>
+        <div><span class="ival-label">Lucro potencial</span><div class="ival green">${im.lucro_potencial?BRL(im.lucro_potencial):'—'}</div></div>
+      </div>
+      <div class="icard-meta">
+        ${im.data_leilao?`<span class="imeta">📅 ${new Date(im.data_leilao).toLocaleDateString('pt-BR')}</span>`:''}
+        ${im.area_construida?`<span class="imeta">📐 ${im.area_construida}m²</span>`:''}
+        ${im.quartos?`<span class="imeta">🛏️ ${im.quartos}q</span>`:''}
+      </div>
+      <div class="icard-actions">
+        <button class="btn-detail" onclick="openModal(${im.id})">Ver detalhes</button>
+        <a class="btn-link" href="${fonteUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Acessar ${fonteLabel}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Acessar Leilão
+        </a>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ================================================================
+// RENDER LISTS
+// ================================================================
+function renderImoveis(){
+  const lista=filterList().sort((a,b)=>b.score-a.score);
+  const total=lista.length;
+  const pages=Math.ceil(total/PER_PAGE);
+  const slice=lista.slice((currentPage-1)*PER_PAGE,currentPage*PER_PAGE);
+  document.getElementById('total-label').textContent=`${total} imóveis encontrados`;
+  const grid=document.getElementById('imoveis-grid');
+  grid.innerHTML=slice.length?slice.map(renderCard).join(''):`<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">Nenhum imóvel encontrado</div><p>Tente ajustar os filtros de busca</p></div>`;
+  renderPagination(pages);
+}
+
+function renderPagination(pages){
+  if(pages<=1){document.getElementById('pagination').innerHTML='';return;}
+  let h=`<button class="page-btn" onclick="changePage(${currentPage-1})" ${currentPage===1?'disabled':''}>← Anterior</button>`;
+  for(let i=Math.max(1,currentPage-2);i<=Math.min(pages,currentPage+2);i++)
+    h+=`<button class="page-btn ${i===currentPage?'active':''}" onclick="changePage(${i})">${i}</button>`;
+  h+=`<button class="page-btn" onclick="changePage(${currentPage+1})" ${currentPage===pages?'disabled':''}>Próximo →</button>`;
+  document.getElementById('pagination').innerHTML=h;
+}
+function changePage(p){currentPage=p;renderImoveis();window.scrollTo(0,0);}
+
+function renderRadar(){
+  const items=allImoveis.filter(i=>i.no_radar).sort((a,b)=>b.score-a.score);
+  document.getElementById('radar-page-grid').innerHTML=items.length
+    ?items.map(renderCard).join('')
+    :`<div class="empty-state"><div class="empty-icon">📡</div><div class="empty-title">Nenhum imóvel no Radar agora</div><p>O sistema atualiza automaticamente todos os dias às 6h</p></div>`;
+}
+
+async function toggleFav(id){
+  await api('POST',`/api/v1/imoveis/${id}/favoritar`);
+  const im=allImoveis.find(i=>i.id===id);
+  if(im)im.is_favorito=!im.is_favorito;
+  renderImoveis();
+  toast(im.is_favorito?'❤️ Favoritado!':'🤍 Removido dos favoritos');
+}
+
+// ================================================================
+// DASHBOARD
+// ================================================================
+async function refreshDashboard(){
+  try{
+    const resumo=await api('GET','/api/v1/dashboard/resumo');
+    const kpis=[
+      {label:'Total de Imóveis',value:resumo.total_imoveis,icon:'🏘️',bg:'#EFF6FF',ic:'#2563EB'},
+      {label:'No Radar',value:resumo.oportunidades_excelentes,icon:'📡',bg:'#ECFDF5',ic:'#059669'},
+      {label:'Desconto Médio',value:resumo.desconto_medio+'%',icon:'📉',bg:'#FFF7ED',ic:'#EA580C'},
+      {label:'Próximos Leilões (30d)',value:resumo.proximos_leiloes,icon:'📅',bg:'#FEF2F2',ic:'#DC2626'},
+    ];
+    document.getElementById('kpi-grid').innerHTML=kpis.map(k=>`
+      <div class="kpi-card">
+        <div class="kpi-row">
+          <div class="kpi-icon" style="background:${k.bg}">${k.icon}</div>
+        </div>
+        <div class="kpi-value">${k.value}</div>
+        <div class="kpi-label">${k.label}</div>
+      </div>`).join('');
+
+    const radar=allImoveis.filter(i=>i.no_radar).sort((a,b)=>b.score-a.score).slice(0,6);
+    document.getElementById('radar-count').textContent=radar.length;
+    document.getElementById('radar-grid').innerHTML=radar.length
+      ?radar.map(renderCard).join('')
+      :`<p style="color:#047857;font-size:13px;">Nenhum imóvel no radar no momento.</p>`;
+
+    await renderCharts();
+  }catch(e){console.error(e);}
+}
+
+async function renderCharts(){
+  const [bairros,tipos]=await Promise.all([
+    api('GET','/api/v1/dashboard/graficos/descontos-por-bairro'),
+    api('GET','/api/v1/dashboard/graficos/oportunidades-por-tipo'),
+  ]);
+  if(chartBairros)chartBairros.destroy();
+  chartBairros=new Chart(document.getElementById('chart-bairros'),{
+    type:'bar',
+    data:{
+      labels:bairros.slice(0,8).map(b=>b.bairro),
+      datasets:[{label:'Desconto médio (%)',data:bairros.slice(0,8).map(b=>b.desconto_medio),
+        backgroundColor:'rgba(37,99,235,.15)',borderColor:'#2563EB',borderWidth:2,borderRadius:6,borderSkipped:false}]
+    },
+    options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'},grid:{color:'#F1F5F9'}},x:{grid:{display:false}}}}
+  });
+  if(chartTipos)chartTipos.destroy();
+  chartTipos=new Chart(document.getElementById('chart-tipos'),{
+    type:'doughnut',
+    data:{
+      labels:tipos.map(t=>t.tipo.charAt(0).toUpperCase()+t.tipo.slice(1)),
+      datasets:[{data:tipos.map(t=>t.total),
+        backgroundColor:['#2563EB','#059669','#EA580C','#DC2626','#7C3AED'],
+        borderWidth:0,hoverOffset:6}]
+    },
+    options:{plugins:{legend:{position:'bottom',labels:{boxWidth:10,padding:14,font:{size:12}}}},cutout:'65%'}
+  });
+}
+
+// ================================================================
+// MAPA — corrigido: recria markers a cada visita, reset de view
+// ================================================================
+async function renderMapa(){
+  // Inicializa o mapa apenas uma vez
+  if(!mapInstance){
+    mapInstance=L.map('map',{zoomControl:true,preferCanvas:false}).setView(ARACAJU,12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19
+    }).addTo(mapInstance);
+    mapMarkersLayer=L.layerGroup().addTo(mapInstance);
+  }
+
+  // Sempre reseta para Aracaju e recria os markers
+  mapMarkersLayer.clearLayers();
+
+  // Aguarda o DOM estar visível antes de invalidar tamanho
+  await new Promise(r=>setTimeout(r,200));
+  mapInstance.invalidateSize();
+  mapInstance.setView(ARACAJU,12);
+
+  const data=await api('GET','/api/v1/dashboard/mapa/imoveis');
+  data.forEach(im=>{
+    if(!im.lat||!im.lng)return;
+    const c=scoreColor(im.score);
+    const fonteUrl=FONTE_URLS[im.fonte]||FONTE_URLS.outro;
+    const isRadar=im.no_radar;
+    const size=isRadar?40:32;
+    const icon=L.divIcon({
+      className:'',
+      iconSize:[size,size],
+      iconAnchor:[size/2,size],
+      popupAnchor:[0,-(size+4)],
+      html:`<div style="
+        width:${size}px;height:${size}px;
+        background:${c};
+        border:3px solid #fff;
+        border-radius:50% 50% 50% 0;
+        transform:rotate(-45deg);
+        box-shadow:0 2px 8px rgba(0,0,0,.35)${isRadar?',0 0 0 3px '+c+'55':''};">
+        <div style="
+          transform:rotate(45deg);
+          display:flex;align-items:center;justify-content:center;
+          width:100%;height:100%;
+          color:#fff;font-size:${isRadar?11:9}px;font-weight:800;
+          font-family:Inter,sans-serif;line-height:1;letter-spacing:-.3px;">
+          ${im.score.toFixed(0)}
+        </div>
+      </div>`,
+    });
+    const marker=L.marker([im.lat,im.lng],{icon});
+    marker.bindPopup(`
+      <div class="map-popup-inner">
+        <div class="map-popup-score" style="color:${c}">Score ${im.score.toFixed(0)}/100${isRadar?' 📡':''}</div>
+        <div class="map-popup-addr">${im.endereco}</div>
+        <div class="map-popup-loc">📍 ${im.bairro||''} · ${im.tipo}</div>
+        <div class="map-popup-vals">
+          <div class="map-popup-val"><label>Lance</label><span>${BRL(im.valor_lance_minimo||im.valor_lance||0)}</span></div>
+          ${im.lucro_potencial?`<div class="map-popup-val"><label>Lucro pot.</label><span style="color:#059669">${BRL(im.lucro_potencial)}</span></div>`:''}
+        </div>
+        <div class="map-popup-actions">
+          <button class="map-btn map-btn-primary" onclick="closeMapPopup();openModal(${im.id})">🔍 Detalhes</button>
+          <a class="map-btn map-btn-ext" href="${fonteUrl}" target="_blank" rel="noopener">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Leilão
+          </a>
+        </div>
+      </div>`,{maxWidth:260});
+    mapMarkersLayer.addLayer(marker);
+  });
+}
+
+function closeMapPopup(){mapInstance&&mapInstance.closePopup();}
+function resetMapView(){if(mapInstance){mapInstance.setView(ARACAJU,12);}}
+
+// ================================================================
+// MODAL DETALHES
+// ================================================================
+function openModal(id){
+  const im=allImoveis.find(i=>i.id===id);
+  if(!im)return;
+  const c=scoreColor(im.score);
+  const ai=im.analise_ia;
+  const fonteUrl=FONTE_URLS[im.fonte]||FONTE_URLS.outro;
+  const fonteLabel=FONTE_LABEL[im.fonte]||im.fonte;
+  const classifMap={excelente:{label:'Excelente Oportunidade',color:'#059669',bg:'#ECFDF5'},boa:{label:'Boa Oportunidade',color:'#2563EB',bg:'#EFF6FF'},moderada:{label:'Oportunidade Moderada',color:'#EA580C',bg:'#FFF7ED'},alto_risco:{label:'Alto Risco',color:'#DC2626',bg:'#FEF2F2'}};
+  const cl=classifMap[ai?.classificacao]||{label:'Em análise',color:'#64748B',bg:'#F8FAFC'};
+
+  document.getElementById('modal-title').textContent=im.tipo.charAt(0).toUpperCase()+im.tipo.slice(1)+' · '+im.bairro;
+
+  document.getElementById('modal-body').innerHTML=`
+    <div class="detail-hero">
+      <div class="detail-pills">
+        <div class="score-pill" style="background:${c};font-size:13px;padding:6px 14px;">
+          <div class="score-pip"></div>Score ${im.score.toFixed(0)}/100 · ${scoreLabel(im.score)}
+        </div>
+        ${im.no_radar?'<div class="radar-pill" style="font-size:12px;padding:5px 12px;">📡 NO RADAR</div>':''}
+      </div>
+      <div class="detail-addr">${im.endereco}</div>
+      <div class="detail-loc">📍 ${im.bairro} · ${im.cidade}/${im.estado}</div>
+    </div>
+
+    <div class="detail-section">
+      <h3>💰 Valores</h3>
+      <div class="detail-rows">
+        <div class="drow"><span class="dl">Valor de Avaliação</span><span class="dv">${BRL(im.valor_avaliacao)}</span></div>
+        <div class="drow"><span class="dl">Lance Mínimo</span><span class="dv big">${BRL(im.valor_lance_minimo)}</span></div>
+        <div class="drow"><span class="dl">Mercado Estimado</span><span class="dv blue">${im.valor_mercado_estimado?BRL(im.valor_mercado_estimado):'—'}</span></div>
+        <div class="drow"><span class="dl">Desconto Estimado</span><span class="dv green" style="font-size:16px;font-weight:800;">${PCT(im.desconto_percentual)}</span></div>
+        <div class="drow"><span class="dl">Lucro Potencial</span><span class="dv green">${im.lucro_potencial?BRL(im.lucro_potencial):'—'}</span></div>
+        <div class="drow"><span class="dl">ROI Estimado</span><span class="dv green">${PCT(im.roi_estimado)}</span></div>
+        ${im.valor_divida?`<div class="drow"><span class="dl">Dívida do Imóvel</span><span class="dv red">${BRL(im.valor_divida)}</span></div>`:''}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h3>🏠 Características</h3>
+      <div class="detail-rows">
+        <div class="drow"><span class="dl">Tipo</span><span class="dv">${im.tipo.toUpperCase()}</span></div>
+        ${im.area_construida?`<div class="drow"><span class="dl">Área Construída</span><span class="dv">${im.area_construida} m²</span></div>`:''}
+        ${im.quartos?`<div class="drow"><span class="dl">Quartos</span><span class="dv">${im.quartos}</span></div>`:''}
+        ${im.vagas?`<div class="drow"><span class="dl">Vagas</span><span class="dv">${im.vagas}</span></div>`:''}
+        <div class="drow"><span class="dl">Situação</span><span class="dv">${im.ocupado?'🔴 Ocupado':'🟢 Desocupado'}</span></div>
+        <div class="drow"><span class="dl">Fonte</span><span class="dv">${fonteLabel}</span></div>
+        ${im.numero_processo?`<div class="drow"><span class="dl">Processo</span><span class="dv" style="font-size:12px;font-weight:500;">${im.numero_processo}</span></div>`:''}
+      </div>
+    </div>
+
+    ${im.data_leilao?`
+    <div class="detail-section">
+      <h3>📅 Datas</h3>
+      <div class="detail-rows">
+        <div class="drow"><span class="dl">Data do Leilão</span><span class="dv">${new Date(im.data_leilao).toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})}</span></div>
+      </div>
+    </div>`:''}
+
+    ${ai?`
+    <div class="detail-section">
+      <h3>🤖 Análise por Inteligência Artificial</h3>
+      <div class="ia-card">
+        <div class="ia-top">
+          <div style="font-size:13px;font-weight:700;color:var(--text-2);display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            GPT-4o-mini · Gerado automaticamente
+          </div>
+          <span class="ia-badge" style="background:${cl.bg};color:${cl.color};">${cl.label}</span>
+        </div>
+        ${ai.resumo_executivo?`<div class="ia-resumo">${ai.resumo_executivo}</div>`:''}
+        <div class="ia-col">
+          ${ai.pontos_positivos?.length?`
+          <div class="ia-block">
+            <h4 style="color:#059669;">✅ Pontos Positivos</h4>
+            <ul>${ai.pontos_positivos.map(p=>`<li><span style="color:#059669;font-weight:700;">+</span> ${p}</li>`).join('')}</ul>
+          </div>`:''}
+          ${ai.pontos_atencao?.length?`
+          <div class="ia-block">
+            <h4 style="color:#EA580C;">⚠️ Atenção</h4>
+            <ul>${ai.pontos_atencao.map(p=>`<li><span style="color:#EA580C;font-weight:700;">!</span> ${p}</li>`).join('')}</ul>
+          </div>`:''}
+        </div>
+        ${ai.riscos_juridicos?.length?`
+        <div class="ia-block" style="margin-bottom:12px;">
+          <h4 style="color:#DC2626;">⚖️ Riscos Jurídicos</h4>
+          <ul>${ai.riscos_juridicos.map(r=>`<li><span style="color:#DC2626;font-weight:700;">▲</span> ${r}</li>`).join('')}</ul>
+        </div>`:''}
+        ${ai.recomendacao_final?`
+        <div class="ia-rec" style="background:${cl.bg};border-color:${cl.color};color:var(--text);">
+          <b style="font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:${cl.color};">Recomendação Final</b>
+          <p style="margin-top:6px;font-size:13px;line-height:1.6;">${ai.recomendacao_final}</p>
+        </div>`:''}
+      </div>
+    </div>`:''}
+
+    <div class="modal-cta">
+      <a class="cta-green" href="${fonteUrl}" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        Acessar Leilão — ${fonteLabel}
+      </a>
+      <button class="cta-primary" onclick="closeModal();goto('simulador');simSelectImovel(${im.id})">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Simular Investimento
+      </button>
+      <button class="cta-secondary" onclick="toggleFav(${im.id});closeModal();">${im.is_favorito?'🤍 Desfavoritar':'❤️ Favoritar'}</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-3);margin-top:14px;text-align:center;">⚠️ Esta análise é estimativa. Consulte um advogado e corretor antes de licitar.</p>
+  `;
+  document.getElementById('modal-imovel').classList.add('open');
+}
+
+function closeModal(){document.getElementById('modal-imovel').classList.remove('open');}
+document.getElementById('modal-imovel').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+
+// ================================================================
+// SIMULADOR
+// ================================================================
+function initSimulador(){simSearch();}
+
+function simSearch(){
+  const q=(document.getElementById('sim-search').value||'').toLowerCase();
+  const lista=allImoveis.filter(im=>!q||im.bairro.toLowerCase().includes(q)||im.endereco.toLowerCase().includes(q)).slice(0,40);
+  document.getElementById('sim-imoveis').innerHTML=lista.map(im=>`
+    <div class="sim-item ${simImovel&&simImovel.id===im.id?'selected':''}" onclick="simSelectImovel(${im.id})">
+      <div class="sim-item-name">${im.endereco}</div>
+      <div class="sim-item-sub">${im.bairro} · Lance ${BRL(im.valor_lance_minimo)} · <span style="color:${scoreColor(im.score)};font-weight:700;">Score ${im.score.toFixed(0)}</span></div>
+    </div>`).join('');
+}
+
+function simSelectImovel(id){
+  simImovel=allImoveis.find(i=>i.id===id);
+  if(!simImovel)return;
+  simSearch();
+  const box=document.getElementById('sim-selected-box');
+  box.style.display='block';
+  document.getElementById('sim-selected-name').textContent=simImovel.endereco;
+  document.getElementById('sim-selected-chips').innerHTML=`
+    <span class="sim-chip" style="background:#EFF6FF;color:#2563EB;">${BRL(simImovel.valor_lance_minimo)}</span>
+    ${simImovel.valor_mercado_estimado?`<span class="sim-chip" style="background:#ECFDF5;color:#059669;">Mercado: ${BRL(simImovel.valor_mercado_estimado)}</span>`:''}
+    <span class="sim-chip" style="background:${scoreColor(simImovel.score)}18;color:${scoreColor(simImovel.score)};">Score ${simImovel.score.toFixed(0)}</span>`;
+  document.getElementById('sim-btn').disabled=false;
+  document.getElementById('sim-result').style.display='none';
+}
+
+async function calcSimulador(){
+  if(!simImovel)return;
+  const body={
+    imovel_id:simImovel.id,
+    valor_reforma:parseFloat(document.getElementById('sim-reforma').value)||0,
+    valor_impostos:parseFloat(document.getElementById('sim-impostos').value)||0,
+    outros_custos:parseFloat(document.getElementById('sim-outros').value)||0,
+  };
+  const v=document.getElementById('sim-venda').value;
+  if(v)body.valor_venda_esperado=parseFloat(v);
+  try{
+    const r=await api('POST','/api/v1/simulador/calcular',body);
+    const div=document.getElementById('sim-result');
+    div.style.display='block';
+    div.innerHTML=`
+      <div class="sim-result-title">📊 Resultado da Simulação — ${simImovel.bairro}</div>
+      <div class="sim-result-grid">
+        <div class="sim-r-item"><label>Investimento Total</label><div class="sim-r-val blue">${BRL(r.investimento_total)}</div></div>
+        <div class="sim-r-item"><label>Valor de Venda</label><div class="sim-r-val">${BRL(r.valor_venda_esperado)}</div></div>
+        <div class="sim-r-item"><label>Lucro Bruto</label><div class="sim-r-val">${BRL(r.lucro_bruto)}</div></div>
+        <div class="sim-r-item"><label>Lucro Líquido</label><div class="sim-r-val green" style="font-size:24px;">${BRL(r.lucro_liquido)}</div></div>
+        <div class="sim-r-item"><label>ROI</label><div class="sim-r-val green">${r.roi_percentual.toFixed(1)}%</div></div>
+        <div class="sim-r-item"><label>Margem</label><div class="sim-r-val">${r.margem_percentual.toFixed(1)}%</div></div>
+        ${r.payback_meses?`<div class="sim-r-item"><label>Payback estimado</label><div class="sim-r-val">${r.payback_meses} meses</div></div>`:''}
+      </div>
+      <div class="sim-warning">⚠️ Considere custos adicionais com cartório, ITBI (2–3%), advogado e reformas não previstas. Esta simulação é uma estimativa.</div>`;
+  }catch(e){toast('❌ '+e.message);}
+}
+
+// ================================================================
+// ALERTAS
+// ================================================================
+async function loadAlertas(){
+  const lista=await api('GET','/api/v1/alertas/');
+  const icons={email:'📧',whatsapp:'💬',telegram:'✈️'};
+  const colors={email:'#EFF6FF',whatsapp:'#ECFDF5',telegram:'#EFF6FF'};
+  const div=document.getElementById('alertas-list');
+  if(!lista.length){
+    div.innerHTML=`<div class="empty-state"><div class="empty-icon">🔔</div><div class="empty-title">Nenhum alerta configurado</div><p>Crie alertas para receber notificações quando novas oportunidades surgirem</p><br><button class="btn-sm primary" style="display:inline-flex;margin:0 auto;" onclick="showAlertaModal()">+ Criar primeiro alerta</button></div>`;
+    return;
+  }
+  div.innerHTML=lista.map(a=>{
+    const parts=[];
+    if(a.bairro)parts.push('Bairro: '+a.bairro);
+    if(a.tipo_imovel)parts.push('Tipo: '+a.tipo_imovel);
+    if(a.score_minimo)parts.push('Score ≥ '+a.score_minimo);
+    if(a.desconto_minimo)parts.push('Desconto ≥ '+a.desconto_minimo+'%');
+    return `
+    <div class="alerta-card">
+      <div class="alerta-icon" style="background:${colors[a.canal]||'#EFF6FF'}">${icons[a.canal]||'📧'}</div>
+      <div class="alerta-info">
+        <div class="alerta-title">${parts.length?parts.join(' · '):'Todos os imóveis'}</div>
+        <div class="alerta-desc">
+          <span class="status-dot" style="background:${a.ativo?'#059669':'#DC2626'}"></span>${a.ativo?'Ativo':'Inativo'}
+          &nbsp;·&nbsp; Canal: ${(a.canal||'email').toUpperCase()}
+        </div>
+      </div>
+      <button class="alerta-del" onclick="removerAlerta(${a.id})">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function showAlertaModal(){document.getElementById('modal-alerta').classList.add('open');}
+
+async function salvarAlerta(){
+  const body={canal:document.getElementById('al-canal').value};
+  const b=document.getElementById('al-bairro').value.trim();
+  const t=document.getElementById('al-tipo').value;
+  const s=document.getElementById('al-score').value;
+  const d=document.getElementById('al-desconto').value;
+  if(b)body.bairro=b;if(t)body.tipo_imovel=t;
+  if(s)body.score_minimo=parseInt(s);if(d)body.desconto_minimo=parseFloat(d);
+  await api('POST','/api/v1/alertas/',body);
+  document.getElementById('modal-alerta').classList.remove('open');
+  loadAlertas();toast('✅ Alerta criado com sucesso!');
+}
+
+async function removerAlerta(id){
+  if(!confirm('Remover este alerta?'))return;
+  await api('DELETE',`/api/v1/alertas/${id}`);
+  loadAlertas();toast('🗑️ Alerta removido');
+}
+
+// ================================================================
+// ADMIN
+// ================================================================
+async function loadAdmin(){
+  const stats=await api('GET','/api/v1/admin/stats');
+  document.getElementById('admin-stats').innerHTML=[
+    {label:'Usuários',value:stats.total_usuarios,icon:'👤',bg:'#EFF6FF'},
+    {label:'Imóveis',value:stats.total_imoveis,icon:'🏘️',bg:'#F0FDF4'},
+    {label:'No Radar',value:stats.imoveis_no_radar,icon:'📡',bg:'#ECFDF5'},
+  ].map(s=>`<div class="kpi-card"><div class="kpi-row"><div class="kpi-icon" style="background:${s.bg}">${s.icon}</div></div><div class="kpi-value">${s.value}</div><div class="kpi-label">${s.label}</div></div>`).join('');
+
+  document.getElementById('admin-fontes').innerHTML=Object.entries(FONTE_LABEL).map(([k,v])=>`
+    <a href="${FONTE_URLS[k]}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:500;color:var(--text);text-decoration:none;transition:.15s;" onmouseover="this.style.background='var(--brand-light)'" onmouseout="this.style.background='var(--bg)'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--brand);flex-shrink:0"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      ${v}
+    </a>`).join('');
+}
+
+async function disparar(){
+  const btn=event.target.closest('button');
+  btn.disabled=true;btn.textContent='⏳ Coletando...';
+  try{
+    const r=await api('POST','/api/v1/admin/coletar');
+    toast('✅ '+r.message);
+    await loadImoveis();loadAdmin();
+  }catch(e){toast('❌ '+e.message);}
+  finally{btn.disabled=false;btn.textContent='🤖 Disparar Coleta';}
+}
+
+// ================================================================
+// TOAST
+// ================================================================
+function toast(msg,dur=3200){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.style.display='block';
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>el.style.display='none',dur);
+}
+
+// ================================================================
+// GLOBAL EVENTS
+// ================================================================
+window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeModal();document.getElementById('modal-alerta').classList.remove('open');}
+});
+
+// ================================================================
+// BOOT
+// ================================================================
+if(token){initApp();}
+</script>
+</body>
+</html>

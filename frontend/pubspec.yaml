@@ -1,0 +1,71 @@
+name: leilao_inteligente
+description: Plataforma SaaS de oportunidades em leilões imobiliários
+
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # HTTP & Estado
+  dio: ^5.4.3
+  provider: ^6.1.2
+  flutter_riverpod: ^2.5.1
+
+  # Roteamento
+  go_router: ^13.2.0
+
+  # UI Components
+  flutter_animate: ^4.5.0
+  shimmer: ^3.0.0
+  fl_chart: ^0.67.0
+  cached_network_image: ^3.3.1
+  flutter_map: ^6.1.0          # OpenStreetMap
+  latlong2: ^0.9.0
+
+  # Formulários e validação
+  reactive_forms: ^17.0.1
+
+  # Storage local
+  shared_preferences: ^2.2.3
+  flutter_secure_storage: ^9.0.0
+
+  # Utilidades
+  intl: ^0.19.0
+  url_launcher: ^6.2.5
+  file_saver: ^0.2.12
+  excel: ^4.0.2
+  pdf: ^3.10.8
+  printing: ^5.12.0
+
+  # Ícones
+  font_awesome_flutter: ^10.7.0
+  lucide_icons: ^0.0.14
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.2
+  build_runner: ^2.4.9
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/icons/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
