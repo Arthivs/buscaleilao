@@ -378,7 +378,17 @@ async function coletarCaixa() {
 // =========================================================
 // ESTADO EM MEMÓRIA
 // =========================================================
-let IMOVEIS = gerarImoveis(80);
+let IMOVEIS = [];
+
+// Coleta automática ao iniciar o servidor
+coletarCaixa().then(reais => {
+  if (reais && reais.length > 0) {
+    IMOVEIS = reais;
+    console.log(`✅ ${reais.length} imóveis reais da Caixa carregados`);
+  } else {
+    console.log('⚠️  Coleta falhou no início. Use Admin → Disparar Coleta para tentar novamente.');
+  }
+});
 const USUARIOS = [
   { id: 1, nome: 'Administrador', email: 'admin@leilaointeligente.com.br', senha: 'Admin@123', role: 'admin', plano: 'enterprise', ativo: true },
   { id: 2, nome: 'João Investidor', email: 'joao@demo.com', senha: 'demo123', role: 'investidor', plano: 'pro', ativo: true },
