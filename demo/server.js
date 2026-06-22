@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const axios = require('axios');
+const csv = require('csv-parser');
+const { Readable } = require('stream');
 
 const app = express();
 app.use(cors());
@@ -209,6 +212,167 @@ function gerarImoveis(n = 80) {
     });
   }
   return imoveis;
+}
+
+// =========================================================
+// CRAWLER CAIXA ECONÔMICA FEDERAL
+// =========================================================
+const CAIXA_CSV_URL = 'https://venda-imoveis.caixa.gov.br/listaweb/Lista_imoveis_georreferenciados.csv?in_estado=SE';
+
+// Cache de geocodificação para não bater a API repetidamente
+const GEO_CACHE = {};
+
+async function geocodificar(endereco, bairro, cidade) {
+  const chave = `${endereco},${bairro},${cidade}`;
+  if (GEO_CACHE[chave]) return GEO_CACHE[chave];
+  try {
+    const q = encodeURIComponent(`${endereco}, ${bairro}, ${cidade}, Sergipe, Brasil`);
+    const r = await axios.get(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
+      headers: { 'User-Agent': 'BuscaLeilao/1.0 (arthursousa2804@gmail.com)' },
+      timeout: 5000,
+    });
+    if (r.data && r.data.length > 0) {
+      const coord = { lat: parseFloat(r.data[0].lat), lng: parseFloat(r.data[0].lon) };
+      GEO_CACHE[chave] = coord;
+      return coord;
+    }
+  } catch (e) { /* ignora erros de geocodificação */ }
+  // Fallback: centróide do bairro
+  const bc = BAIRRO_COORDS[bairro];
+  return bc ? { lat: bc.lat + rnd(-0.001, 0.001), lng: bc.lng + rnd(-0.001, 0.001) } : { lat: -10.9472, lng: -37.0731 };
+}
+
+function normalizarTipo(descricao = '') {
+  const d = descricao.toLowerCase();
+  if (d.includes('apartamento') || d.includes('apto')) return 'apartamento';
+  if (d.includes('casa')) return 'casa';
+  if (d.includes('terreno') || d.includes('lote')) return 'terreno';
+  if (d.includes('comercial') || d.includes('loja') || d.includes('sala') || d.includes('galpão')) return 'comercial';
+  return 'apartamento';
+}
+
+function calcularScore(im) {
+  const liquidez = LIQUIDEZ[im.bairro] || 45;
+  const valorizacao = liquidez - 5;
+  const scoreDesc = Math.min((im.desconto_percentual || 0) * 2, 100);
+  const scoreOcup = im.ocupado ? 0 : 100;
+  return Math.round((scoreDesc * 0.40 + ((liquidez + valorizacao) / 2) * 0.20 + liquidez * 0.15 + valorizacao * 0.15 + scoreOcup * 0.10) * 10) / 10;
+}
+
+async function coletarCaixa() {
+  console.log('🔍 Iniciando coleta Caixa Econômica Federal...');
+  try {
+    const response = await axios.get(CAIXA_CSV_URL, {
+      responseType: 'text',
+      timeout: 30000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Accept': 'text/html,application/xhtml+xml,*/*',
+      },
+    });
+
+    const rows = [];
+    await new Promise((resolve, reject) => {
+      const readable = Readable.from([response.data]);
+      readable
+        .pipe(csv({ separator: ';', skipLines: 0 }))
+        .on('data', row => rows.push(row))
+        .on('end', resolve)
+        .on('error', reject);
+    });
+
+    console.log(`📦 ${rows.length} registros recebidos da Caixa`);
+
+    const imoveis = [];
+    let id = 1;
+
+    for (const row of rows) {
+      // Normaliza as chaves (remove espaços e caracteres especiais)
+      const get = (...keys) => {
+        for (const k of keys) {
+          const found = Object.keys(row).find(rk => rk.toLowerCase().includes(k.toLowerCase()));
+          if (found && row[found] && row[found].trim()) return row[found].trim();
+        }
+        return '';
+      };
+
+      const cidade = get('cidade') || 'Aracaju';
+      const bairro = get('bairro') || 'Centro';
+      const endereco = get('endereço', 'endereco', 'logradouro') || 'Endereço não informado';
+      const descricao = get('descrição', 'descricao', 'tipo') || '';
+      const tipo = normalizarTipo(descricao);
+
+      const precoStr = get('preço', 'preco', 'valor de venda', 'lance').replace(/[^\d,]/g, '').replace(',', '.');
+      const avaliacaoStr = get('avaliação', 'avaliacao', 'valor de avaliação').replace(/[^\d,]/g, '').replace(',', '.');
+      const descontoStr = get('desconto').replace(/[^\d,]/g, '').replace(',', '.');
+
+      const valorLance = parseFloat(precoStr) || 0;
+      const valorAvaliacao = parseFloat(avaliacaoStr) || valorLance * 1.3;
+      const descontoPct = parseFloat(descontoStr) || (valorAvaliacao > 0 ? ((valorAvaliacao - valorLance) / valorAvaliacao) * 100 : 0);
+
+      if (valorLance < 10000) continue; // ignora registros inválidos
+
+      const urlImovel = get('link', 'url', 'href') || 'https://venda-imoveis.caixa.gov.br';
+      const areaStr = get('área', 'area', 'm²', 'metragem').replace(/[^\d,]/g, '').replace(',', '.');
+      const area = parseFloat(areaStr) || 80;
+      const quartosStr = get('quarto', 'dormitório', 'dorm');
+      const quartos = parseInt(quartosStr) || null;
+
+      const vgvMap = VGV[bairro.toLowerCase()] || VGV.default;
+      const vgvM2 = vgvMap[tipo] || 3500;
+      const valorMercado = Math.max(valorAvaliacao, area * vgvM2);
+      const lucroPotencial = valorMercado - valorLance;
+      const roi = (lucroPotencial / valorLance) * 100;
+
+      const im = {
+        id: id++,
+        endereco,
+        bairro,
+        cidade,
+        estado: 'SE',
+        tipo,
+        area_construida: area,
+        quartos,
+        vagas: null,
+        ocupado: false,
+        fonte: 'caixa',
+        valor_avaliacao: Math.round(valorAvaliacao),
+        valor_lance_minimo: Math.round(valorLance),
+        valor_mercado_estimado: Math.round(valorMercado),
+        desconto_percentual: Math.round(descontoPct * 10) / 10,
+        lucro_potencial: Math.round(lucroPotencial),
+        roi_estimado: Math.round(roi * 10) / 10,
+        url_imovel: urlImovel,
+        url_edital: urlImovel,
+        latitude: null,
+        longitude: null,
+        is_favorito: false,
+        no_radar: false,
+        data_leilao: null,
+        fotos: [],
+        analise_ia: null,
+        created_at: new Date().toISOString(),
+      };
+      im.score = calcularScore(im);
+      im.no_radar = im.score >= 80 && im.desconto_percentual >= 30 && im.lucro_potencial >= 50000;
+      imoveis.push(im);
+    }
+
+    // Geocodifica em lotes (máx 1 req/seg para respeitar Nominatim)
+    console.log(`📍 Geocodificando ${imoveis.length} imóveis...`);
+    for (const im of imoveis) {
+      const coord = await geocodificar(im.endereco, im.bairro, im.cidade);
+      im.latitude = coord.lat;
+      im.longitude = coord.lng;
+      await new Promise(r => setTimeout(r, 1100)); // respeita rate limit Nominatim
+    }
+
+    console.log(`✅ Coleta concluída: ${imoveis.length} imóveis da Caixa`);
+    return imoveis;
+  } catch (err) {
+    console.error('❌ Erro na coleta Caixa:', err.message);
+    return null;
+  }
 }
 
 // =========================================================
@@ -457,14 +621,16 @@ app.get('/api/v1/admin/stats', (req, res) => {
   res.json({ total_usuarios: USUARIOS.length, total_imoveis: IMOVEIS.length, imoveis_no_radar: IMOVEIS.filter(i => i.no_radar).length });
 });
 
-app.post('/api/v1/admin/coletar', (req, res) => {
+app.post('/api/v1/admin/coletar', async (req, res) => {
   const u = auth(req, res); if (!u) return;
-  // Simula chegada de novos imóveis
-  const novos = gerarImoveis(5);
-  const maxId = Math.max(...IMOVEIS.map(i => i.id));
-  novos.forEach((im, idx) => { im.id = maxId + idx + 1; });
-  IMOVEIS = [...novos, ...IMOVEIS];
-  res.json({ message: `Coleta simulada: ${novos.length} novos imóveis adicionados`, novos: novos.length });
+  res.json({ message: 'Coleta iniciada em segundo plano. Aguarde alguns minutos e recarregue a página.', status: 'running' });
+  const reais = await coletarCaixa();
+  if (reais && reais.length > 0) {
+    IMOVEIS = reais;
+    console.log(`✅ Base atualizada com ${reais.length} imóveis reais da Caixa`);
+  } else {
+    console.log('⚠️  Coleta falhou, mantendo dados atuais');
+  }
 });
 
 // =========================================================
