@@ -12,7 +12,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // =========================================================
-// DADOS MOCK — Simulam o banco de dados em memória
+// DADOS DE REFERÊNCIA
 // =========================================================
 
 const bairros = ['Atalaia', 'Coroa do Meio', 'Farolândia', 'Jardins', 'Grageru', 'Luzia', '13 de Julho', 'Centro', 'Aeroporto', 'Inácio Barbosa'];
@@ -103,9 +103,6 @@ const LOCAIS_REAIS = {
     { endereco: 'Rua Pedro Valadares, 1800',      lat: -10.9992, lng: -37.0655 },
   ],
 };
-const tipos = ['apartamento', 'casa', 'terreno', 'comercial'];
-const fontes = ['caixa', 'tjse', 'banco_brasil', 'leiloeiro'];
-
 const VGV = {
   atalaia: { apartamento: 7500, casa: 5500, terreno: 3000, comercial: 8000 },
   'coroa do meio': { apartamento: 7000, casa: 5000, terreno: 2800, comercial: 7500 },
@@ -129,90 +126,7 @@ const ANALISES_IA = [
 ];
 
 function rnd(min, max) { return Math.random() * (max - min) + min; }
-function randInt(min, max) { return Math.floor(rnd(min, max + 1)); }
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-function gerarImoveis(n = 80) {
-  const imoveis = [];
-  const coords = { lat: -10.9472, lng: -37.0731 };
-
-  for (let i = 1; i <= n; i++) {
-    const tipo = pick(tipos);
-    const bairro = pick(bairros);
-    const fonte = pick(fontes);
-    const area = randInt(45, 280);
-    const ocupado = Math.random() < 0.25;
-
-    const vgvMap = VGV[bairro.toLowerCase()] || VGV.default;
-    const vgvM2 = vgvMap[tipo] || 3500;
-    const valorMercado = area * vgvM2;
-    const descontoBase = rnd(15, 55);
-    const valorLance = valorMercado * (1 - descontoBase / 100);
-    const valorAvaliacao = valorMercado * rnd(0.85, 0.98);
-
-    const liquidez = LIQUIDEZ[bairro] || 45;
-    const valorizacao = liquidez - 5;
-    const scoreLoc = (liquidez + valorizacao) / 2;
-    const scoreDesc = Math.min(descontoBase * 2, 100);
-    const scoreOcup = ocupado ? 0 : 100;
-    const score = scoreDesc * 0.40 + scoreLoc * 0.20 + liquidez * 0.15 + valorizacao * 0.15 + scoreOcup * 0.10;
-
-    const lucroPotencial = valorMercado - valorLance;
-    const roi = (lucroPotencial / valorLance) * 100;
-
-    const diasAte = randInt(3, 45);
-    const dataLeilao = new Date(Date.now() + diasAte * 86400000);
-
-    const noRadar = score >= 80 && descontoBase >= 30 && lucroPotencial >= 50000 && diasAte <= 30;
-
-    const analise = ANALISES_IA[score >= 80 ? 0 : score >= 60 ? 1 : 2];
-    const resumo = `${tipo.charAt(0).toUpperCase() + tipo.slice(1)} de ${area}m² localizado em ${bairro}. Desconto estimado de ${descontoBase.toFixed(1)}% em relação ao mercado. Região com ${liquidez >= 80 ? 'alta' : 'média'} liquidez. Potencial de lucro estimado em ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(lucroPotencial)}.`;
-
-    const locais = LOCAIS_REAIS[bairro] || [];
-    const local = locais.length ? pick(locais) : { endereco: 'Rua Projetada, 100', lat: -10.9472, lng: -37.0731 };
-
-    imoveis.push({
-      id: i,
-      endereco: local.endereco,
-      bairro,
-      cidade: 'Aracaju',
-      estado: 'SE',
-      cep: `4${randInt(9000, 9999)}-${randInt(100, 999)}`,
-      tipo,
-      area_construida: area,
-      area_terreno: tipo === 'terreno' ? area : null,
-      quartos: tipo !== 'terreno' && tipo !== 'comercial' ? randInt(1, 4) : null,
-      vagas: tipo !== 'terreno' ? randInt(0, 2) : null,
-      ocupado,
-      fonte,
-      numero_processo: `${randInt(1000000, 9999999)}-${randInt(10, 99)}.${new Date().getFullYear()}.8.25.${randInt(1000, 9999)}`,
-      valor_avaliacao: Math.round(valorAvaliacao),
-      valor_lance_minimo: Math.round(valorLance),
-      valor_mercado_estimado: Math.round(valorMercado),
-      valor_divida: Math.random() < 0.6 ? Math.round(rnd(5000, 50000)) : null,
-      score: Math.round(score * 10) / 10,
-      desconto_percentual: Math.round(descontoBase * 10) / 10,
-      lucro_potencial: Math.round(lucroPotencial),
-      roi_estimado: Math.round(roi * 10) / 10,
-      vgv_m2: vgvM2,
-      payback_meses: Math.round((valorLance * 0.005) > 0 ? valorLance / (valorLance * 0.005) : null),
-      no_radar: noRadar,
-      data_leilao: dataLeilao.toISOString(),
-      latitude: local.lat,
-      longitude: local.lng,
-      url_edital: 'https://www.tjse.jus.br/',
-      url_imovel: 'https://venda-imoveis.caixa.gov.br/',
-      fotos: [],
-      is_favorito: false,
-      analise_ia: {
-        ...analise,
-        resumo_executivo: resumo,
-      },
-      created_at: new Date(Date.now() - randInt(0, 30) * 86400000).toISOString(),
-    });
-  }
-  return imoveis;
-}
 
 // =========================================================
 // CRAWLER CAIXA ECONÔMICA FEDERAL
